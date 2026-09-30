@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iframe Test - FullHDFilmizlesene API</title>
+<style>
+body{font-family:Arial;background:#111;color:#eee;margin:0;padding:20px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+input{padding:8px;min-width:280px;background:#222;color:#fff;border:1px solid #444;border-radius:6px}
+button{padding:8px 14px;background:#0af;border:none;border-radius:6px;cursor:pointer;color:#fff}
+button:hover{background:#09c}
+#log{background:#000;padding:10px;border-radius:6px;white-space:pre-wrap;font-size:12px;max-height:200px;overflow:auto}
+.card{background:#1c1c1c;border:1px solid #333;border-radius:8px;padding:8px;width:160px;cursor:pointer}
+.card img{width:100%;border-radius:6px}
+.grid{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+iframe#player{width:100%;height:480px;border:1px solid #444;border-radius:8px;background:#000}
+select{background:#222;color:#fff;padding:8px;border-radius:6px}
+</style>
+</head>
+<body>
+<h2>Iframe Test Paneli</h2>
+<div class="row">
+<label>API: <input id="api" value="http://127.0.0.1:8000"></label>
+<button onclick="apiStatus()">/ Durum</button>
+<button onclick="loadLatest()">/latest</button>
+</div>
+<div class="row">
+<input id="q" value="supergirl" placeholder="film ara">
+<button onclick="doSearch()">/search</button>
+</div>
+<div class="row">
+<input id="detail" value="https://www.fullhdfilmizlesene.now/film/supergirl/" placeholder="film url veya slug" style="min-width:380px">
+<button onclick="doDetail()">/movie-detail</button>
+</div>
+<div class="row">
+<label>referrerpolicy:
+<select id="refpol">
+<option value="no-referrer-when-downgrade">no-referrer-when-downgrade (varsayılan)</option>
+<option value="unsafe-url">unsafe-url (referer zorla)</option>
+<option value="no-referrer">no-referrer (referer gönderme - 403 beklenir)</option>
+<option value="origin">origin</option>
+</select>
+</label>
+<button onclick="embedDirect()">iframe'i göm</button>
+<button onclick="openDirect()">yeni sekmede aç (403 beklenir)</button>
+</div>
+<div id="log">log buraya gelecek...</div>
+<h3>Sonuçlar</h3>
+<div id="results" class="grid"></div>
+<h3>Player</h3>
+<iframe id="player" allowfullscreen allow="fullscreen; autoplay; picture-in-picture"></iframe>
+<p id="iframeUrl"></p>
+
+<script>
+let lastIframe = "";
+function log(m){ document.getElementById('log').textContent = m + "\n" + document.getElementById('log').textContent.slice(0,4000); }
+function api(){ return document.getElementById('api').value.replace(/\/$/,''); }
+async function apiStatus(){
+  try{ let r = await fetch(api() + '/'); log('/ => ' + await r.text()); }
+  catch(e){ log('API erisilemedi (uvicorn calisiyor mu?): ' + e); }
+}
+async function loadLatest(){
+  try{
+    let r = await fetch(api() + '/latest'); let j = await r.json();
+    log('/latest count=' + j.count);
+    showCards(j.results || []);
+  }catch(e){ log('hata: ' + e); }
+}
+async function doSearch(){
+  try{
+    let q = document.getElementById('q').value;
+    let r = await fetch(api() + '/search?query=' + encodeURIComponent(q));
+    let j = await r.json();
+    log('/search count=' + j.count);
+    showCards(j.results || []);
+  }catch(e){ log('hata: ' + e); }
+}
+function showCards(list){
+  let box = document.getElementById('results'); box.innerHTML = '';
+  list.forEach(f => {
+    let d = document.createElement('div'); d.className = 'card';
+    d.innerHTML = '<img loading="lazy" src="'+(f.poster||'')+'"><b>'+(f.title||'')+'</b><br><small>'+(f.slug||'')+'</small>';
+    d.onclick = () => { document.getElementById('detail').value = f.url || f.slug; doDetail(); };
+    box.appendChild(d);
+  });
+}
+async function doDetail(){
+  try{
+    let u = document.getElementById('detail').value;
+    let r = await fetch(api() + '/movie-detail?url=' + encodeURIComponent(u));
+    let j = await r.json();
+    log('/movie-detail title=' + j.title + ' imdb=' + j.imdb + ' iframe=' + j.iframe);
+    lastIframe = j.iframe || '';
+    document.getElementById('iframeUrl').textContent = 'iframe: ' + lastIframe;
+    if(lastIframe) embedDirect();
+  }catch(e){ log('hata: ' + e); }
+}
+function embedDirect(){
+  let pol = document.getElementById('refpol').value;
+  let fr = document.getElementById('player');
+  fr.setAttribute('referrerpolicy', pol);
+  if(!lastIframe){ log('once /movie-detail cagir (iframe yok)'); return; }
+  log('iframe gomuluyor: ' + lastIframe + ' policy=' + pol);
+  fr.src = lastIframe;
+  fr.onload = () => log('iframe onload tetiklendi (bos siyah ekran = 403 olabilir)');
+  fr.onerror = () => log('iframe onerror');
+  setTimeout(() => {
+    try{ log('iframe length check: ' + (fr.contentDocument ? 'erisim var' : 'cross-origin (normal)')); }
+    catch(e){ log('cross-origin kisitli (normal, player yuklenmis olabilir): ' + e.message); }
+  }, 4000);
+}
+function openDirect(){
+  if(lastIframe) window.open(lastIframe, '_blank');
+}
+apiStatus();
+</script>
+</body>
+</html>

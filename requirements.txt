@@ -1,0 +1,9 @@
+fastapi
+httpx
+uvicorn
+python-dotenv
+curl_cffi
+beautifulsoup4
+lxml
+aiohttp
+python-telegram-bot>=20.0
